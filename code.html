@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script>
+    <link rel="stylesheet" href="code.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.2/css/bulma.min.css">
+    <title>Gasコード公開</title>
+    
+</head>
+<body>
+<style>
+    .code{
+    background-color: royalblue;
+    }
+</style>
+  <section class="hero is-primary">
+    <div class="hero-body">
+      <div class="container">
+        <h1 class="title is-size-1">GASでNUCTのスケジュールをタスクに変換する</h1>
+        
+      </div>
+    </div>
+  </section>
+  <main>
+    <br>
+    <div class="container">
+      <h1 class="title">
+      手順
+      </h1>
+      <div class="box content">
+      <ul style="margin-top:0;">
+      <li>NUCTからGoogleカレンダーにエクスポートする</li>
+      <li>コードをGoogleSpreadSheetのエディタにコピペする</li>
+      <li>コードを実行する</li>
+      </ul>
+      </div>
+      <div class="notification is-info">
+        権限の許可が求められることがありますが、許可して大丈夫です。
+      </div>
+      <hr style="margin-bottom:0.5rem;">
+    </div>
+    <div class="container">
+       <h2 class="title">1.NUCT→Googleカレンダーにエクスポート</h2>
+       <div class="box content">
+         <li>NUCT>スケジュール>公開（プライベート）> httpsから始まるリンクをコピー</li>
+         <li>Googleカレンダー > 他のカレンダーの横の＋ > URLで追加 > URLをペースト</li>
+       </div>
+    </div>
+
+    <div class="container">
+      <br>
+      <h2 class="title">2.コードをGoogleSpreadSheetのエディタにコピペする</h2>
+      <div class="box content">
+        <li>スプレッドシートを新規作成>ツール>スクリプトエディタ</li> 
+        <li>サービス > Tasks APIを選択、追加 </li>
+        <li>ファイルの＋から新しいスクリプトを3つ追加 > スクリプトの名前を上から1,2,3,4にする</li>
+        <li>下記のコード1~4をGAS上のスクリプト1~4にコピペ</li>
+      </div>
+    </div>
+     
+    <div class="codes">
+    <section class="section">
+      <div class="container">
+        <p>コード１：初期状態を作るために使います。</p>
+      <pre>
+          <code class="prettyprint linenums">
+              function henkan(today) {
+                  //Tue Apr 13 2021 19:00:00 GMT+0900(Japan Standard Time)となっている日時をRFC3339方式（2021-04-13T19:00:00_00.000+0900)に変換
+                  timex = Utilities.formatDate(today,"JST", "HH:mm:ss")
+                  datex = Utilities.formatDate(today,"JST", "yyyy-MM-dd");
+                  hiduke = datex + "T" + timex + ".000+09:00" ;
+                  return(hiduke);
+                }
+                
+                function Getnow() {
+                  var d = new Date();
+                  var y = d.getFullYear();
+                  var mon = d.getMonth() + 1;
+                  var d2 = d.getDate();
+                  var h = d.getHours();
+                  var min = d.getMinutes();
+                  var s = d.getSeconds();
+                  var now = y+"/"+mon+"/"+d2+" "+h+":"+min+":"+s;
+                  return now;
+                }
+                
+                
+                function setup() {
+                  //初期状態を作るために使う
+                  CalendarApp.getDefaultCalendar();
+                  const calendarId = cID();
+                  const calendar = CalendarApp.getCalendarById(calendarId);
+                  const taskListId = tID();
+                
+                  const startdate = new Date('2021/5/9');//カレンダーのイベントを読み込み始める日付
+                  const enddate = new Date('2029/12/31');
+                  const events = calendar.getEvents(startdate,enddate);
+                
+                  for(const event of events){
+                    let titleEvent = event.getTitle();
+                    let description = event.getDescription();
+                    let shimekiri = henkan(event.getEndTime());
+                  
+                    var task = {
+                        title: titleEvent, //  タイトル
+                        notes: description, // メモ
+                        due: shimekiri // 締切日。日付のフォーマットはRFC3339に準拠
+                      };
+                      task = Tasks.Tasks.insert(task, taskListId);
+                      Logger.log("新しいタスクのID：" + task.id);
+                    
+                  }
+                  const sheet = SpreadsheetApp.getActiveSheet();
+                  const cell = sheet.getRange(sheet.getLastRow()+1,1);
+                  cell.setValue(Getnow());
+                  }
+                
+                
+                
+          </code>
+      </pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <p>コード２：タスクいじる関連です。</p>
+      <pre>
+          <code class="prettyprint linenums">
+            function getTaskLists() {
+              var taskLists = Tasks.Tasklists.list().getItems();
+              if (!taskLists) {
+                return [];
+              }
+              return taskLists.map(function(taskList) {
+                return {
+                  id: taskList.getId(),
+                  name: taskList.getTitle()
+                };
+              });
+            }
+
+            function viewAllList(){
+              var myTaskLists = getTaskLists();
+              let i =0;
+              for(const j of myTaskLists){
+              Logger.log( myTaskLists[i].id);
+              Logger.log( myTaskLists[i].name);
+              i++;
+              }
+            }
+
+            function callListTasks(){
+              const myTaskListId = listTaskLists();
+              listTasks(myTaskListId);
+            }
+
+            function listTaskLists() {
+              //タスクリストのidと名前を返す
+              let taskLists = Tasks.Tasklists.list();
+              if (taskLists.items) {
+                let peach = [[],[]];
+                Logger.log(taskLists.items.length);
+                for (let i = 0; i < taskLists.items.length; i++) {
+                  let taskList = taskLists.items[i];                  
+                  peach[i] = [taskList.id,taskList.title];
+                }
+                return peach;
+              } else {
+                Logger.log('Sorry, No task lists found.');
+                return "none";
+              }
+              
+            }
+
+            function listTasks(taskListId) {
+              //あるタスクリストの中のタスクの一覧を返す
+              let tasks = Tasks.Tasks.list(taskListId);
+              if (tasks.items) {
+                console.log(tasks.items.length);
+                let taskReturn = [];
+                for (let i = 0; i < tasks.items.length; i++) {
+                  let task = tasks.items[i];
+                  taskReturn[i] = task.title;
+                }
+                return taskReturn;
+              } else {
+                Logger.log('Sorry, No tasks found.');
+                return "none";
+              }
+            }
+
+            function view(){
+              array = listTaskLists();
+              let j=0;
+              for(i of array){
+              Logger.log(listTasks(array[j][0]));
+              j++;
+              }
+            }
+
+            function viewAllListInSheet(){
+              const sheet = SpreadsheetApp.getActiveSheet();
+              var myTaskLists = getTaskLists();              
+              let i =0;
+              for(const j of myTaskLists){
+                let cell = sheet.getRange(i+1,6);
+                cell.setValue( myTaskLists[i].id);
+                cell = sheet.getRange(i+1,7);
+                cell.setValue( myTaskLists[i].name);
+                i++;
+              }
+            }
+          </code>
+      </pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <p>コード３：更新するために使います。改善の余地あり。</p>
+      <pre>
+          <code class="prettyprint linenums">
+            function update() {
+              CalendarApp.getDefaultCalendar();
+              const sheet = SpreadsheetApp.getActiveSheet();
+              const calendarId = cID();
+              const calendar = CalendarApp.getCalendarById(calendarId);
+              const taskListId = tID();
+              
+              const startdate = new Date('2021/5/1');
+              const enddate = new Date('2030/12/31');
+              const events = calendar.getEvents(startdate,enddate);
+              const cell = sheet.getRange(sheet.getLastRow(),1);
+              let lastUpdate = new Date(cell.getValue());
+              lastUpdate = lastUpdate.getTime();
+              
+              for(const event of events){
+               console.log(event.getTitle()  + ":" +event.getDateCreated())
+               let whenNewEvent = event.getDateCreated().getTime();
+               //この判定方法やめた方がいいんかな
+               //ある予定が作成された日時と最終更新日時を比べて、追加するようにしている
+               
+               let bool = lastUpdate < whenNewEvent; 
+               
+               if(bool == true){
+                 let titleEvent = event.getTitle();
+                 let description = event.getDescription();
+                 let shimekiri = henkan(event.getEndTime());
+                 
+                  var task = {
+                    title: titleEvent, //  タイトル
+                    notes: description + "from update script", // いらんかったら消してね
+                    due: shimekiri // 締切日。日付のフォーマットはRFC3339に準拠
+                  };
+             
+                 //コンソールに書き出す
+                 task = Tasks.Tasks.insert(task, taskListId);
+                 Logger.log("新しいタスクのID：" + task.id);
+                 
+                 //スプレッドシートに更新日時を書き足す
+                 const cell = sheet.getRange(sheet.getLastRow()+1,sheet.getLastColumn());
+                 cell.setValue(Getnow());
+               }
+              }
+              
+             }   
+          </code>
+      </pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <p>コード４:IDを登録するのに使います。</p>
+        <div class="container">
+          ※IDはカレンダーやタスクのリスト一つ一つに割り振られています。
+        </div>
+      <pre>
+          <code class="prettyprint linenums">
+            function tID() {
+              const sheet = SpreadsheetApp.getActiveSheet();
+              let cell = sheet.getRange('B1');
+              let tID = cell.getValue();
+              return tID;
+            }
+            
+            function cID() {
+              const sheet = SpreadsheetApp.getActiveSheet();
+              let cell = sheet.getRange('B2');
+              let cID = cell.getValue();
+              return cID;
+              
+            }
+            
+            
+          </code>
+      </pre>
+      </div>
+    </section>
+    </div>
+
+    <div class="container">
+      <div class="title">3.実行する</div>
+      <div class="box content">
+        <li>カレンダーIDを調べる。googleカレンダ > オーバーフローメニュー > 設定 > カレンダーを結合 > カレンダーID</li>
+        <li>カレンダーIDをスプレッドシートのB2にペースト</li>
+        <li>スクリプト2を開き、viewAllListInSheetを選択、実行する。</li>
+        <li>スプレッドシートにタスクID一覧が表示されるので、選んでB1にペースト</li>
+        <li>スクリプト1を開く。setupを選択、実行する。</li>
+        <li>更新したい時はスクリプト3をからupdateを選択、実行する。</li>
+        
+      </div>
+    </div>
+  </main>
+  
+  <footer class="footer">
+    <div class="content has-text-centered">
+      <p>
+        見てくださってありがとうございました。
+      </p>
+    </div>
+  </footer>
+  
+  
+    
+    
+    
+   
+</body>
+</html>
