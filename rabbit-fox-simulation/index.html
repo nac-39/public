@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" />
+    <title>計算情報学２：シミュレーション</title>
+  </head>
+  <body>
+    <h1 class="title is-1">計算情報学２：第二回</h1>
+    <style>
+      #ex_chart {
+        max-width: 640px;
+        max-height: 480px;
+      }
+      .px-1 {
+        padding-right: 0.5rem;
+        padding-left: 0.5rem;
+      }
+      .flex {
+        display: flex;
+      }
+      .w-full {
+        width: 100%;
+      }
+      body {
+        padding: 1rem;
+      }
+      .font-bold {
+        font-weight: bold;
+      }
+    </style>
+    <p class="px-1 title is-4">初期値</p>
+    <div class="flex">
+      <div class="px-1">
+        <label for="s1_fox_init">キツネ</label>
+        <input value="5" type="number" name="s1_init" min="0" class="px-1 input" placeholder="0" id="s1_fox_init" />
+      </div>
+      <div class="px-1">
+        <label for="s1_rabbit_init">ウサギ</label>
+        <input value="5" type="number" name="s1_init" min="0" class="px-1 input" placeholder="0" id="s1_rabbit_init" />
+      </div>
+    </div>
+    <div class="flex">
+      <div class="px-1">
+        <label for="s1_year_init">年数</label>
+        <input value="50" type="number" name="s1_year_init" min="0" class="px-1 input" placeholder="50" id="s1_year_init" />
+      </div>
+      <div class="px-1">
+        <label for="s1_ex_count_init">実験の回数</label>
+        <input value="100" type="number" name="s1_ex_count_init" min="0" class="px-1 input" placeholder="100" id="s1_ex_count_init" />
+      </div>
+    </div>
+    <button onclick="onSimulation1()" class="px-1 button w-full is-dark mt-3">実行</button>
+    <div class="pt-3">
+      <h2 class="title is-3">複数回実行時の平均・標準偏差</h2>
+      <div class="flex">
+        <p class="px-1 font-bold">平均値</p>
+        <p class="px-1" id="s1_fox_avg"></p>
+        <p class="px-1" id="s1_rabbit_avg"></p>
+      </div>
+      <div class="flex">
+        <p class="px-1 font-bold">標準偏差</p>
+        <p class="px-1" id="s1_fox_std"></p>
+        <p class="px-1" id="s1_rabbit_std"></p>
+      </div>
+      <div class="flex">
+        <p class="px-1 font-bold">両方絶滅の割合</p>
+        <p class="px-1" id="s1_extincted_prop"></p>
+      </div>
+      <canvas id="simulation1"></canvas>
+      <h2 class="title is-2">一回だけ実行</h2>
+      <canvas id="simulation2"></canvas>
+    </div>
+  </body>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="./dist/simurasion.js"></script>
+  <script>
+    // シミュレーション1
+    const ctx1 = document.getElementById("simulation1");
+    window.chart = new Chart(ctx1, {
+      type: "line",
+      data: [],
+      options: {},
+    });
+    const ctx2 = document.getElementById("simulation2");
+    window.chart2 = new Chart(ctx2, {
+      type: "line",
+      data: [],
+      options: {},
+    });
+    let years = 100;
+    let counts = 100;
+    const onSimulation1 = () => {
+      const initRabbitNum = Number(document.getElementById("s1_rabbit_init").value);
+      const initFoxNum = Number(document.getElementById("s1_fox_init").value);
+      onSimulation2(initRabbitNum, initFoxNum);
+      years = Number(document.getElementById("s1_year_init").value);
+      counts = Number(document.getElementById("s1_ex_count_init").value);
+      let { rabbitResult, foxResult, extinctResult } = new Main().simulation1(initRabbitNum, initFoxNum, counts, years);
+      const rabbitAvg = rabbitResult.reduce((a, b) => a + b) / rabbitResult.length;
+      const foxAvg = foxResult.reduce((a, b) => a + b) / foxResult.length;
+      document.getElementById("s1_fox_avg").innerText = `fox: ${foxAvg}`;
+      document.getElementById("s1_rabbit_avg").innerText = `rabbit: ${rabbitAvg}`;
+      // それぞれの標準偏差
+      const rabbitStd = Math.sqrt(rabbitResult.reduce((a, b) => a + Math.pow(b - rabbitAvg, 2)) / rabbitResult.length);
+      const foxStd = Math.sqrt(foxResult.reduce((a, b) => a + Math.pow(b - foxAvg, 2)) / foxResult.length);
+      document.getElementById("s1_fox_std").innerText = `fox: ${foxStd}`;
+      document.getElementById("s1_rabbit_std").innerText = `rabbit: ${rabbitStd}`;
+      // 絶滅の割合
+      const extinctedProp = extinctResult.reduce((a, b) => a + b) / extinctResult.length;
+      document.getElementById("s1_extincted_prop").innerText = `${extinctedProp}`;
+      // グラフ描画
+      const data1 = {
+        labels: Array.from({ length: counts }, (_, i) => i + 1),
+        datasets: [
+          {
+            label: "fox",
+            data: foxResult,
+            borderColor: "rgba(255, 100, 100, 1)",
+          },
+          {
+            label: "rabbit",
+            data: rabbitResult,
+            borderColor: "rgba(100, 100, 255, 1)",
+          },
+        ],
+      };
+
+      const options = {
+        scales: {
+          y: {
+            display: true,
+            text: "個体数",
+          },
+          x: {
+            display: true,
+            text: "実験回数",
+          },
+        },
+      };
+      if (window.chart) window.chart.destroy();
+      window.chart = new Chart(ctx1, {
+        type: "line",
+        data: data1,
+        options: options,
+      });
+    };
+
+    const onSimulation2 = (initRabbitNum, initFoxNum) => {
+      const { rabbitCountTransition, foxCountTransition, extincted } = new Main().simulate(initRabbitNum, initFoxNum, years);
+      var data2 = {
+        labels: Array.from({ length: years }, (_, i) => i + 1),
+        datasets: [
+          {
+            label: "fox",
+            data: foxCountTransition,
+            borderColor: "rgba(255, 100, 100, 1)",
+          },
+          {
+            label: "rabbit",
+            data: rabbitCountTransition,
+            borderColor: "rgba(100, 100, 255, 1)",
+          },
+        ],
+      };
+      const options = {
+        scales: {
+          y: {
+            display: true,
+            text: "個体数",
+          },
+          x: {
+            display: true,
+            text: "日数",
+          },
+        },
+      };
+      if (window.chart2) window.chart2.destroy();
+      window.chart2 = new Chart(ctx2, {
+        type: "line",
+        data: data2,
+        options: options,
+      });
+    };
+  </script>
+</html>
